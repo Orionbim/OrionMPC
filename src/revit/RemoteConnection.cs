@@ -33,6 +33,7 @@ namespace OrionMcp.Revit2024
         private ClientWebSocket? socket;
         private Credentials? credentials;
         private volatile int attempt;
+        private int connectionGeneration;
         private string state = "disconnected", message = "Conecta el servidor HTTP para comenzar.", userCode = "", serverBase = DefaultServer;
         private string clientState = "idle", clientMessage = "", clientCode = "";
         private bool clientBusy;
@@ -110,7 +111,7 @@ namespace OrionMcp.Revit2024
             lock (gate)
             {
                 if (lifetime != null) return;
-                serverBase = saved.Server; credentials = saved; lifetime = new CancellationTokenSource();
+                serverBase = saved.Server; credentials = saved; lifetime = new CancellationTokenSource(); connectionGeneration++;
                 Set("reconnecting", "Reanudando la conexión autorizada…");
                 _ = RunGuarded(saved, lifetime.Token);
             }
@@ -122,7 +123,7 @@ namespace OrionMcp.Revit2024
             lock (gate)
             {
                 if (lifetime != null) throw new ApiFault("CONNECTION_RUNNING", "Desconecta la sesión anterior antes de iniciar otra.");
-                serverBase = origin; lifetime = new CancellationTokenSource();
+                serverBase = origin; lifetime = new CancellationTokenSource(); connectionGeneration++;
                 Set("pairing", "Solicitando código temporal…");
                 _ = PairAndConnect(origin, lifetime.Token);
                 return Snapshot();
@@ -158,11 +159,17 @@ namespace OrionMcp.Revit2024
         // Explicit user action: stop, forget the credential and revoke it on the server (best effort).
         internal object Disconnect()
         {
-            Credentials? previous;
-            lock (gate) { previous = credentials; credentials = null; }
+            Credentials? previous; int generation;
+            lock (gate) { previous = credentials; credentials = null; generation = ++connectionGeneration; }
             Stop(); Forget();
-            if (previous != null) _ = Task.Run(async () => { try { using (var client = NewClient(previous.Server)) await Post(client, "/devices/disconnect", new { }, CancellationToken.None, previous.Token).ConfigureAwait(false); } catch (Exception) { } });
-            Set("disconnected", "Conexión del equipo cerrada y credencial revocada."); SetClient("idle", "");
+            Set("disconnected", previous == null ? "Conexión del equipo cerrada." : "Conexión cerrada. Comprobando la revocación en el servidor…"); SetClient("idle", "");
+            if (previous != null) _ = Task.Run(async () =>
+            {
+                string description;
+                try { using (var client = NewClient(previous.Server)) await Post(client, "/devices/disconnect", new { }, CancellationToken.None, previous.Token).ConfigureAwait(false); description = "Conexión cerrada y revocación confirmada por el servidor."; }
+                catch (Exception) { description = "Conexión cerrada. No se pudo confirmar la revocación; comprueba el servidor antes de considerar revocada la credencial."; }
+                lock (gate) if (generation == connectionGeneration && lifetime == null) Set("disconnected", description);
+            });
             return Snapshot();
         }
         private void Stop() { lock (gate) { lifetime?.Cancel(); socket?.Abort(); lifetime?.Dispose(); lifetime = null; clientBusy = false; } }
