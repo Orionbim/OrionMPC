@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework><UseWPF>true</UseWPF>
+    <LangVersion>latest</LangVersion><Nullable>enable</Nullable>
+    <AssemblyName>OrionMcp.Revit2024</AssemblyName><RootNamespace>OrionMcp.Revit2024</RootNamespace>
+    <Revit2024Path Condition="'$(Revit2024Path)'==''">C:\Program Files\Autodesk\Revit 2024</Revit2024Path>
+    <DynamoPath>$(Revit2024Path)\AddIns\DynamoForRevit</DynamoPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="RevitAPI"><HintPath>$(Revit2024Path)\RevitAPI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="RevitAPIUI"><HintPath>$(Revit2024Path)\RevitAPIUI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="DynamoCore"><HintPath>$(DynamoPath)\DynamoCore.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="DynamoRevitDS"><HintPath>$(DynamoPath)\Revit\DynamoRevitDS.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="System.Web.Extensions" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.1343.22" />
+    <Content Include="../../ui/dist/**/*"><Link>ui/%(RecursiveDir)%(Filename)%(Extension)</Link><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+  </ItemGroup>
+</Project>
