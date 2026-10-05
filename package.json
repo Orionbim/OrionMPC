@@ -13,10 +13,12 @@
     "build": "npm run build:server && npm run build:ui",
     "start": "node dist/server/http.js",
     "local": "node dist/server/local.js",
+    "test": "npm run build:server && node --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p ui/tsconfig.json"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.27.1",
+    "express": "5.2.1",
     "jose": "6.2.12",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -24,6 +26,7 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
+    "@types/express": "5.0.6",
     "@types/node": "24.10.1",
     "@types/react": "19.0.10",
     "@types/react-dom": "19.0.4",

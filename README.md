@@ -17,9 +17,10 @@ permite consultar versión, documentos y parámetros. Los cambios de parámetros
 texto solicitan aprobación dentro de Revit. El diagnóstico detecta la versión
 Dynamo y si está abierto.
 
-La conexión HTTP autenticada y su emparejamiento se están completando. La creación,
-edición y ejecución de grafos Dynamo y el instalador para usuarios todavía no
-están disponibles. No se declara cobertura completa de Revit o Dynamo.
+La conexión HTTP incluye autenticación OAuth y emparejamiento con aprobación
+en Revit. El acceso remoto inicial permite lecturas. La creación, edición y
+ejecución de grafos Dynamo y el instalador para usuarios todavía no están
+disponibles. No se declara cobertura completa de Revit o Dynamo.
 
 ## Requisitos
 
@@ -71,21 +72,53 @@ No presupongas que el timeout deshizo la operación.
 
 ## Conectar Shelra por HTTP
 
-Endpoint previsto del servicio:
+Endpoint del servicio:
 
 ```text
-https://orionmcp-production.up.railway.app/mcp
+https://orionmpc-production.up.railway.app/mcp
 ```
 
-El flujo principal será iniciar sesión, emparejar el add-in y seleccionar Shelra
-desde la interfaz. La integración nativa de Shelra se está preparando para usar
-este endpoint por defecto. Ese flujo aún no está completo en esta versión;
-no interpretes una respuesta del servidor como prueba de conexión con Revit.
+Utiliza una versión de Shelra que incluya la integración ORIONMCP y el comando
+`mcp orionmcp login`. Si ese comando no aparece en su ayuda, actualiza Shelra.
+La integración usa el endpoint anterior por defecto; no tienes que editar JSON.
+
+1. Abre Revit 2024 y el panel **ORIONMCP**.
+2. Pulsa **Conectar servidor HTTP**. Conserva la dirección predeterminada,
+   salvo que utilices tu propio servidor.
+3. El panel mostrará un código temporal válido durante cinco minutos.
+4. En Shelra, ejecuta `shelra mcp orionmcp login`. Se abrirá el navegador.
+5. Introduce el código del panel en la página de ORIONMCP.
+6. Vuelve a Revit y revisa el cliente, servidor e instancia. Aprueba la conexión
+   si los datos coinciden. El permiso inicial permite consultar el modelo.
+7. En Shelra, ejecuta `shelra mcp orionmcp test` para descubrir herramientas y
+   `shelra mcp orionmcp inspect` para consultar la versión y los documentos reales.
+8. Empieza una sesión de Shelra y pide una primera consulta de lectura.
+
+El estado «Equipo conectado» indica que existe un canal al servidor. Una respuesta
+real de versión o documentos desde Shelra comprueba que la solicitud llegó a Revit.
+Las escrituras remotas todavía no están habilitadas en esta versión.
+
+Si elegiste otro servidor anteriormente, puedes preparar su cambio con
+`shelra mcp orionmcp connect --url https://orionmpc-production.up.railway.app/mcp`.
+Revisa la vista previa y repite con `--apply` para conservar una copia y cambiar
+únicamente ORIONMCP. No se reemplazan otros servidores ni preferencias.
 
 Una vez verificada la conexión, comienza con una consulta de lectura: «Indica a
 qué instancia de Revit y documento estás conectado». Después inspecciona elementos
 y prepara cambios con aprobación. Las credenciales de ORIONMCP son independientes
 de las credenciales del proveedor de modelos de Shelra.
+
+## Resolver problemas de conexión
+
+- **Código caducado:** desconecta el equipo, genera otro código y repite el login.
+- **Autenticación pendiente:** completa la página del navegador y la aprobación
+  en Revit; escribir una configuración no autoriza al cliente.
+- **Sin instancias Revit:** comprueba que Revit está abierto, que el complemento
+  cargó y que su panel muestra el equipo conectado.
+- **Sin documentos:** abre un modelo y vuelve a consultar los documentos.
+- **Conexión interrumpida:** el add-in intenta reconectar. Consulta el estado
+  actual antes de repetir una tarea. La autorización del equipo de esta versión
+  caduca al cabo de una hora y requiere volver a conectar.
 
 ## Desplegar tu propio servidor
 

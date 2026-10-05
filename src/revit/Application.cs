@@ -12,6 +12,7 @@ namespace OrionMcp.Revit2024
         internal static readonly DockablePaneId PaneId = new DockablePaneId(new Guid("A51D947E-6DC8-4927-9C79-F9B1C8513309"));
         internal static ExecutionQueue? Queue;
         private LocalPipe? pipe;
+        private RemoteConnection? remote;
         public Result OnStartup(UIControlledApplication app)
         {
             try
@@ -19,7 +20,8 @@ namespace OrionMcp.Revit2024
                 AppDomain.CurrentDomain.AssemblyResolve += ResolveDynamo;
                 Queue = new ExecutionQueue();
                 Queue.Attach(ExternalEvent.Create(Queue));
-                app.RegisterDockablePane(PaneId, "ORIONMCP", new WebPanel(Queue));
+                remote = new RemoteConnection(Queue, System.Windows.Threading.Dispatcher.CurrentDispatcher);
+                app.RegisterDockablePane(PaneId, "ORIONMCP", new WebPanel(Queue, remote));
                 try { app.CreateRibbonTab("ORIONMCP"); } catch (Autodesk.Revit.Exceptions.ArgumentException) { }
                 var panel = app.CreateRibbonPanel("ORIONMCP", "Conexión");
                 var assembly = Assembly.GetExecutingAssembly().Location;
@@ -53,7 +55,7 @@ namespace OrionMcp.Revit2024
         }
         public Result OnShutdown(UIControlledApplication app)
         {
-            pipe?.Dispose(); Queue?.Dispose(); Queue = null;
+            remote?.Dispose(); pipe?.Dispose(); Queue?.Dispose(); Queue = null;
             AppDomain.CurrentDomain.AssemblyResolve -= ResolveDynamo;
             return Result.Succeeded;
         }

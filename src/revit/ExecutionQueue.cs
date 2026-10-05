@@ -126,7 +126,7 @@ namespace OrionMcp.Revit2024
             if (request.operation == "selection.get")
             {
                 Keys(request);
-                if (app.ActiveUIDocument == null || app.ActiveUIDocument.Document != document) throw new ApiFault("CONTEXT_CONFLICT", "La selección pertenece al documento visible. Activa el documento objetivo y vuelve a consultar.");
+                if (app.ActiveUIDocument == null || !app.ActiveUIDocument.Document.Equals(document)) throw new ApiFault("CONTEXT_CONFLICT", "La selección pertenece al documento visible. Activa el documento objetivo y vuelve a consultar.");
                 return new { documentId = request.documentId, elementIds = app.ActiveUIDocument.Selection.GetElementIds().Take(200).Select(id => id.Value.ToString(CultureInfo.InvariantCulture)).ToArray() };
             }
             if (request.operation == "parameters.read")
@@ -149,7 +149,7 @@ namespace OrionMcp.Revit2024
             review.AddCommandLink(TaskDialogCommandLinkId.CommandLink1, "Aprobar esta operación concreta"); review.CommonButtons = TaskDialogCommonButtons.Cancel;
             if (review.Show() != TaskDialogResult.CommandLink1) throw new ApiFault("APPROVAL_DENIED", "Cambio cancelado por la persona usuaria.");
             if (Deadline(request) <= DateTime.UtcNow) throw new ApiFault("EXPIRED", "Aprobación fuera de plazo; no se modificó el modelo.");
-            if (ResolveDocument(app, request.documentId) != document || parameter.AsString() != before) throw new ApiFault("CONTEXT_CHANGED", "Documento o valor cambió después de preparar la operación.");
+            if (!ResolveDocument(app, request.documentId).Equals(document) || parameter.AsString() != before) throw new ApiFault("CONTEXT_CHANGED", "Documento o valor cambió después de preparar la operación.");
             var journal = Path.Combine(LocalRoot, "journal", InstanceId); Directory.CreateDirectory(journal);
             var receipt = Path.Combine(journal, request.requestId + ".json");
             File.WriteAllText(receipt, Json(new { requestId = request.requestId, status = "executing", documentId = request.documentId }), new UTF8Encoding(false));

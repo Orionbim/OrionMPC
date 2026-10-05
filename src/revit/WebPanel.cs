@@ -13,8 +13,9 @@ namespace OrionMcp.Revit2024
     {
         private const string Origin = "https://app.orionmcp.local";
         private readonly ExecutionQueue queue;
+        private readonly RemoteConnection remote;
         private bool initialized;
-        internal WebPanel(ExecutionQueue queue) { this.queue = queue; Loaded += Initialize; }
+        internal WebPanel(ExecutionQueue queue, RemoteConnection remote) { this.queue = queue; this.remote = remote; Loaded += Initialize; }
         private async void Initialize(object sender, RoutedEventArgs args)
         {
             if (initialized) return; initialized = true;
@@ -35,7 +36,23 @@ namespace OrionMcp.Revit2024
                 {
                     if (!SameOrigin(e.Source)) return;
                     Request request = new Request();
-                    try { request = ExecutionQueue.Parse(e.WebMessageAsJson); var result = await queue.Submit(request, nativeUi: true); web.CoreWebView2.PostWebMessageAsJson(ExecutionQueue.Json(result)); }
+                    try
+                    {
+                        request = ExecutionQueue.Parse(e.WebMessageAsJson);
+                        object result;
+                        if (request.operation.StartsWith("connection.", StringComparison.Ordinal))
+                        {
+                            if (request.v != 1 || !Guid.TryParse(request.requestId, out var requestGuid) || request.documentId != null || !DateTime.TryParse(request.deadlineUtc, out var deadline) || deadline.ToUniversalTime() <= DateTime.UtcNow || deadline.ToUniversalTime() > DateTime.UtcNow.AddMinutes(2)) throw new ApiFault("INVALID_REQUEST", "Solicitud de conexión no válida.");
+                            object connection;
+                            if (request.operation == "connection.connect" && request.args.Count == 1 && request.args.TryGetValue("serverBase", out var address) && address is string text) connection = remote.Start(text);
+                            else if (request.operation == "connection.status" && request.args.Count == 0) connection = remote.Snapshot();
+                            else if (request.operation == "connection.disconnect" && request.args.Count == 0) connection = remote.Disconnect();
+                            else throw new ApiFault("INVALID_ARGUMENTS", "Acción de conexión no permitida.");
+                            result = new { requestId = request.requestId, ok = true, result = connection };
+                        }
+                        else result = await queue.Submit(request, nativeUi: true);
+                        web.CoreWebView2.PostWebMessageAsJson(ExecutionQueue.Json(result));
+                    }
                     catch (Exception ex) { web.CoreWebView2.PostWebMessageAsJson(ExecutionQueue.Json(ExecutionQueue.Failure(request, ex is ApiFault fault ? fault.Code : "UI_BRIDGE_ERROR", ex.Message))); }
                 };
                 web.Source = new Uri(Origin + "/index.html");

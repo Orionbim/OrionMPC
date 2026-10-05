@@ -12,6 +12,8 @@
     <Reference Include="DynamoCore"><HintPath>$(DynamoPath)\DynamoCore.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="DynamoRevitDS"><HintPath>$(DynamoPath)\Revit\DynamoRevitDS.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Security" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.1343.22" />
     <Content Include="../../ui/dist/**/*"><Link>ui/%(RecursiveDir)%(Filename)%(Extension)</Link><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
   </ItemGroup>
