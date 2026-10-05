@@ -18,7 +18,7 @@ export function buildApplication(config: { base?: string; key?: string; database
   let hub: Hub | undefined;
   const configured = Boolean(config.base && config.key);
   app.use((req, res, next) => {
-    res.set({ "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Frame-Options": "DENY" });
+    res.set({ "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "same-origin", "X-Frame-Options": "DENY" });
     if (config.base && req.headers.origin && req.headers.origin !== new URL(config.base).origin) {
       res.status(403).json({ error: "origin_denied" }); return;
     }

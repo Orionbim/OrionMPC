@@ -93,6 +93,9 @@ test("full HTTP flow: pairing, /token, MCP over Streamable HTTP, device refresh 
       assert.equal((await post("/devices/pairing", { instanceId }, { Authorization: "Bearer " + "0".repeat(64) })).status, 401);
       assert.equal((await post("/devices/pairing", { instanceId: randomUUID() }, { Authorization: `Bearer ${bearer}` })).status, 401);
     });
+    await t.test("browser form posts keep their real Origin (regression: no-referrer made Chrome send Origin: null and /pair-authorize answered origin_denied)", async () => {
+      assert.equal((await fetch(origin + "/healthz")).headers.get("referrer-policy"), "same-origin");
+    });
     await t.test("disconnect revokes the device family", async () => {
       assert.equal((await post("/devices/disconnect", {}, { Authorization: `Bearer ${bearer}` })).status, 200);
       assert.equal((await post("/devices/disconnect", {}, { Authorization: `Bearer ${bearer}` })).status, 401);
