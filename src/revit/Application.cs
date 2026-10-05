@@ -22,6 +22,7 @@ namespace OrionMcp.Revit2024
                 Queue.Attach(ExternalEvent.Create(Queue));
                 remote = new RemoteConnection(Queue, System.Windows.Threading.Dispatcher.CurrentDispatcher);
                 app.RegisterDockablePane(PaneId, "ORIONMCP", new WebPanel(Queue, remote));
+                remote.TryResume();
                 try { app.CreateRibbonTab("ORIONMCP"); } catch (Autodesk.Revit.Exceptions.ArgumentException) { }
                 var panel = app.CreateRibbonPanel("ORIONMCP", "Conexión");
                 var assembly = Assembly.GetExecutingAssembly().Location;

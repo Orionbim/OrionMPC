@@ -5,7 +5,7 @@ import "./style.css";
 interface Status { instanceId: string; pid: number; version: string; }
 interface Document { documentId: string; title: string; readOnly: boolean; projectInfoId: string; }
 interface Parameter { name: string; builtInParameter: number | null; storageType: string; readOnly: boolean; value: string | null; }
-interface Connection { state: string; message: string; userCode: string; serverBase: string; }
+interface Connection { state: string; message: string; userCode: string; serverBase: string; clientState: string; clientMessage: string; clientCode: string; }
 type Reply = { requestId: string; ok: boolean; result?: unknown; error?: { code: string; message: string } };
 const pending = new Map<string, { resolve: (r: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 declare global { interface Window { chrome?: { webview: { postMessage: (data: unknown) => void; addEventListener: (type: string, fn: (e: { data: Reply }) => void) => void } }; } }
@@ -49,6 +49,9 @@ function App() {
       <button disabled={busy || (connection != null && connection.state !== "disconnected")} onClick={() => run(async () => { setConnection(await call<Connection>("connection.connect", { serverBase })); })}>Conectar servidor HTTP</button>
       <button disabled={busy || !connection || connection.state === "disconnected"} onClick={() => run(async () => { setConnection(await call<Connection>("connection.disconnect")); })}>Desconectar equipo</button>
       <p role="status">{connection?.message ?? "Conexión HTTP pendiente de comprobar."}</p>
+      {connection?.state === "connected" && <div><button disabled={busy || ["pairing", "waiting_for_client", "approval_required"].includes(connection.clientState)} onClick={() => run(async () => { setConnection(await call<Connection>("connection.pair_client")); })}>Añadir otro cliente</button>
+        {connection.clientMessage && <p role="status">{connection.clientMessage}</p>}
+        {connection.clientCode && <div><p>Código para el nuevo cliente</p><strong className="pairing-code">{connection.clientCode}</strong><p>Claude Code, Cursor, Shelra u otro cliente: inicia sesión en ORIONMCP, introduce este código en el navegador y aprueba aquí.</p></div>}</div>}
       {connection?.userCode && <div><p>Código temporal de Revit</p><strong className="pairing-code">{connection.userCode}</strong><p>En Shelra, ejecuta <code>shelra mcp orionmcp login</code>, introduce el código en el navegador y aprueba el cliente aquí.</p></div>}
       <p className="small">Equipo conectado y tarea comprobada son estados distintos. Comienza consultando la instancia y los documentos desde Shelra. El permiso remoto inicial es de lectura.</p>
     </section>

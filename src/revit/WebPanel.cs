@@ -46,6 +46,7 @@ namespace OrionMcp.Revit2024
                             object connection;
                             if (request.operation == "connection.connect" && request.args.Count == 1 && request.args.TryGetValue("serverBase", out var address) && address is string text) connection = remote.Start(text);
                             else if (request.operation == "connection.status" && request.args.Count == 0) connection = remote.Snapshot();
+                            else if (request.operation == "connection.pair_client" && request.args.Count == 0) connection = remote.PairClient();
                             else if (request.operation == "connection.disconnect" && request.args.Count == 0) connection = remote.Disconnect();
                             else throw new ApiFault("INVALID_ARGUMENTS", "Acción de conexión no permitida.");
                             result = new { requestId = request.requestId, ok = true, result = connection };
