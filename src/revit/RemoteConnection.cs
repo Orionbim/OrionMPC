@@ -67,7 +67,7 @@ namespace OrionMcp.Revit2024
 
         internal object Snapshot()
         {
-            lock (gate) return new { state, message, userCode, serverBase, instanceId = deviceId, clientState, clientMessage, clientCode };
+            lock (gate) return new { state, message, userCode, serverBase, instanceId = queue.InstanceId, deviceId, clientState, clientMessage, clientCode };
         }
         private void Set(string next, string description, string code = "") { lock (gate) { state = next; message = description; userCode = code; } }
         private void SetClient(string next, string description, string code = "") { lock (gate) { clientState = next; clientMessage = description; clientCode = code; } }
@@ -286,7 +286,7 @@ namespace OrionMcp.Revit2024
                 try
                 {
                     await ws.ConnectAsync(endpoint.Uri, rotate.Token).ConfigureAwait(false);
-                    await Send(ws, new { type = "hello", instanceId = deviceId, pid = Process.GetCurrentProcess().Id }, rotate.Token).ConfigureAwait(false);
+                    await Send(ws, new { type = "hello", deviceId, instanceId = queue.InstanceId, pid = Process.GetCurrentProcess().Id }, rotate.Token).ConfigureAwait(false);
                     attempt = 0; Set("connected", "Equipo conectado por HTTPS. Los clientes autorizados ya pueden consultar este Revit.");
                     var buffer = new byte[8192];
                     while (ws.State == WebSocketState.Open && !rotate.IsCancellationRequested)

@@ -4,7 +4,7 @@ import type { Server } from "node:http";
 import { Authorization } from "./authorization.js";
 import type { HostResult } from "./bridge.js";
 
-interface Peer { owner: string; instanceId: string; pid: number; socket: WebSocket; alive: boolean; }
+interface Peer { owner: string; deviceId: string; instanceId: string; pid: number; socket: WebSocket; alive: boolean; }
 export class Hub {
   private server: WebSocketServer;
   private peers = new Map<string, Peer>();
@@ -18,14 +18,17 @@ export class Hub {
         const owner = identity.extra?.owner, instanceId = identity.extra?.deviceId;
         if (!identity.scopes.includes("orion:device") || typeof owner !== "string" || typeof instanceId !== "string") throw new Error("Denied");
         ws.handleUpgrade(req, socket, head, (peerSocket) => {
-          const peer: Peer = { owner, instanceId, pid: 0, socket: peerSocket, alive: true };
+          const peer: Peer = { owner, deviceId: instanceId, instanceId: "", pid: 0, socket: peerSocket, alive: true };
           const helloDeadline = setTimeout(() => { if (!peer.pid) peerSocket.close(1008, "Hello required"); }, 10_000);
           const key = `${owner}:${instanceId}`, existing = this.peers.get(key); existing?.socket.close(1000, "Connection replaced"); this.peers.set(key, peer);
           peerSocket.on("pong", () => { peer.alive = true; });
           peerSocket.on("message", (raw) => {
             try {
               const frame = JSON.parse(raw.toString());
-              if (frame.type === "hello" && frame.instanceId === instanceId && Number.isInteger(frame.pid) && frame.pid > 0) { peer.pid = frame.pid; return; }
+              if (frame.type === "hello") {
+                if ((frame.deviceId ?? frame.instanceId) !== peer.deviceId || typeof frame.instanceId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(frame.instanceId) || !Number.isInteger(frame.pid) || frame.pid <= 0) { peerSocket.close(1008, "Invalid instance identity"); return; }
+                peer.instanceId = frame.instanceId; peer.pid = frame.pid; return;
+              }
               const waiter = this.pending.get(frame.requestId);
               if (!waiter || waiter.peer !== peer || typeof frame.ok !== "boolean") return;
               clearTimeout(waiter.timer); this.pending.delete(frame.requestId); waiter.resolve(frame);
@@ -48,7 +51,7 @@ export class Hub {
   close() { for (const client of this.server.clients) client.terminate(); this.server.close(); }
   async dispatch(owner: string, instanceId: string, operation: string, args: Record<string, unknown>, documentId?: string, suppliedId?: string): Promise<HostResult> {
     if (!["system.status", "documents.list", "selection.get", "parameters.read", "dynamo.environment"].includes(operation)) throw new Error("Remote writes are unavailable until durable approval and reconciliation are verified.");
-    const peer = this.peers.get(`${owner}:${instanceId}`); if (!peer || peer.socket.readyState !== WebSocket.OPEN) throw new Error("Target Revit instance is disconnected.");
+    const peer = [...this.peers.values()].find((p) => p.owner === owner && p.instanceId === instanceId && p.pid > 0); if (!peer || peer.socket.readyState !== WebSocket.OPEN) throw new Error("Target Revit instance is disconnected.");
     if (this.pending.size >= 128) throw new Error("Remote queue is full.");
     const requestId = suppliedId ?? randomUUID();
     if (this.pending.has(requestId)) throw new Error("Request is already running; reconcile before retrying.");

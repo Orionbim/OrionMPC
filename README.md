@@ -117,8 +117,8 @@ de las credenciales del proveedor de modelos de Shelra.
   cargó y que su panel muestra el equipo conectado.
 - **Sin documentos:** abre un modelo y vuelve a consultar los documentos.
 - **Conexión interrumpida:** el add-in intenta reconectar. Consulta el estado
-  actual antes de repetir una tarea. La autorización del equipo de esta versión
-  caduca al cabo de una hora y requiere volver a conectar.
+  actual antes de repetir una tarea. El complemento renueva la autorización del
+  equipo; si fue revocada o caducó, vuelve a emparejar desde el panel.
 
 ## Desplegar tu propio servidor
 

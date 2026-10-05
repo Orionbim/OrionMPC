@@ -65,7 +65,8 @@ test("full HTTP flow: pairing, /token, MCP over Streamable HTTP, device refresh 
     const socket = new WebSocket(origin.replace("http", "ws") + "/device", { headers: { Authorization: `Bearer ${bearer}` } });
     sockets.push(socket);
     await new Promise((resolve, reject) => { socket.once("open", resolve); socket.once("error", reject); });
-    socket.send(JSON.stringify({ type: "hello", instanceId, pid: 4242 }));
+    const revitInstanceId = randomUUID();
+    socket.send(JSON.stringify({ type: "hello", deviceId: instanceId, instanceId: revitInstanceId, pid: 4242 }));
     socket.on("message", (raw) => { const m = JSON.parse(raw.toString()); socket.send(JSON.stringify({ requestId: m.requestId, ok: true, result: { stub: true, operation: m.operation } })); });
     await new Promise((resolve) => setTimeout(resolve, 30));
     await t.test("a real MCP SDK client lists tools and reaches the device through Streamable HTTP", async () => {
@@ -73,8 +74,9 @@ test("full HTTP flow: pairing, /token, MCP over Streamable HTTP, device refresh 
       await mcp.connect(new StreamableHTTPClientTransport(new URL(origin + "/mcp"), { requestInit: { headers: { Authorization: `Bearer ${secondTokens.access_token}` } } }));
       try {
         const tools = (await mcp.listTools()).tools.map((x) => x.name); assert.ok(tools.includes("revit_status") && tools.includes("orion_status"));
-        const status = JSON.parse((await mcp.callTool({ name: "orion_status", arguments: {} })).content[0].text); assert.equal(status.revitInstances.length, 1);
-        const reply = JSON.parse((await mcp.callTool({ name: "revit_status", arguments: { instanceId } })).content[0].text); assert.equal(reply.ok, true);
+        const status = JSON.parse((await mcp.callTool({ name: "orion_status", arguments: {} })).content[0].text); assert.equal(status.revitInstances.length, 1); assert.equal(status.revitInstances[0].instanceId, revitInstanceId);
+        await assert.rejects(app.hub.dispatch(app.store.get("access", (await import("../dist/server/authorization.js")).digest(secondTokens.access_token)).owner, instanceId, "system.status", {}));
+        const reply = JSON.parse((await mcp.callTool({ name: "revit_status", arguments: { instanceId: revitInstanceId } })).content[0].text); assert.equal(reply.ok, true);
       } finally { await mcp.close(); }
       assert.equal((await fetch(origin + "/mcp", { headers: { Authorization: `Bearer ${secondTokens.access_token}`, Accept: "text/event-stream" } })).status, 405);
     });
@@ -84,7 +86,7 @@ test("full HTTP flow: pairing, /token, MCP over Streamable HTTP, device refresh 
       const tokens = await third.token.json(); assert.equal(third.token.status, 200);
       const mcp = new Client({ name: "third", version: "0" });
       await mcp.connect(new StreamableHTTPClientTransport(new URL(origin + "/mcp"), { requestInit: { headers: { Authorization: `Bearer ${tokens.access_token}` } } }));
-      try { const status = JSON.parse((await mcp.callTool({ name: "orion_status", arguments: {} })).content[0].text); assert.equal(status.revitInstances[0].instanceId, instanceId); }
+      try { const status = JSON.parse((await mcp.callTool({ name: "orion_status", arguments: {} })).content[0].text); assert.equal(status.revitInstances[0].instanceId, revitInstanceId); }
       finally { await mcp.close(); }
     });
     await t.test("a stranger cannot mint codes for someone else's device", async () => {
