@@ -22,6 +22,8 @@ interface Grant { clientId: string; owner: string; resource: string; scopes: str
 export class Authorization implements OAuthServerProvider {
   readonly resource: string;
   readonly clientsStore: OAuthRegisteredClientsStore;
+  /** The SDK token handler only forwards code_verifier to the provider when this is true; exchangeAuthorizationCode verifies PKCE itself. */
+  readonly skipLocalPkceValidation = true;
   constructor(readonly store: Store, readonly base: string) {
     this.resource = `${base.replace(/\/$/, "")}/mcp`;
     this.clientsStore = {
@@ -58,6 +60,12 @@ export class Authorization implements OAuthServerProvider {
     this.store.set("refresh", digest(refresh), grant, grant.expires);
     return { access_token: access, token_type: "Bearer", expires_in: 600, refresh_token: refresh, scope: grant.scopes.join(" ") };
   }
+  private issueDevice(grant: Grant) {
+    const access = secret(), refresh = secret();
+    this.store.set("access", digest(access), grant, Date.now() + 60 * minute);
+    this.store.set("device-refresh", digest(refresh), grant, grant.expires);
+    return { deviceToken: access, refreshToken: refresh, expiresIn: 3600 };
+  }
   async exchangeRefreshToken(client: OAuthClientInformationFull, refresh: string, scopes?: string[], resource?: URL): Promise<OAuthTokens> {
     const fingerprint = digest(refresh);
     const used = this.store.get<Grant>("used-refresh", fingerprint);
@@ -78,10 +86,19 @@ export class Authorization implements OAuthServerProvider {
     if (grant?.clientId === client.client_id) this.store.set("revoked", grant.family, true, grant.expires);
   }
   registerPairRoutes(app: Express): void {
-    app.post("/devices/pairing", (req, res) => {
+    app.post("/devices/pairing", async (req, res) => {
       if (typeof req.body?.instanceId !== "string" || !/^[a-f0-9-]{36}$/.test(req.body.instanceId)) return res.status(400).json({ error: "invalid_instance" });
+      // An already-authorized device may mint a code for an additional client; that client then shares the device owner.
+      let owner: string | undefined;
+      if (req.headers.authorization) {
+        try {
+          const identity = await this.verifyAccessToken(req.headers.authorization.replace(/^Bearer /, ""));
+          if (!identity.scopes.includes("orion:device") || identity.extra?.deviceId !== req.body.instanceId || typeof identity.extra?.owner !== "string") return res.status(401).json({ error: "unauthorized" });
+          owner = identity.extra.owner;
+        } catch { return res.status(401).json({ error: "unauthorized" }); }
+      }
       const pairingId = randomUUID(), proof = secret(), userCode = randomBytes(4).toString("hex").toUpperCase(), expires = Date.now() + 5 * minute;
-      this.store.set("pair", pairingId, { instanceId: req.body.instanceId, proof: digest(proof), userCode, expires } satisfies Pair, expires);
+      this.store.set("pair", pairingId, { instanceId: req.body.instanceId, proof: digest(proof), userCode, expires, owner } satisfies Pair, expires);
       this.store.set("pair-code", userCode, pairingId, expires);
       res.json({ pairingId, pairingSecret: proof, userCode, expiresAt: new Date(expires).toISOString() });
     });
@@ -94,11 +111,29 @@ export class Authorization implements OAuthServerProvider {
       const pair = this.pair(req.params.id, req.headers.authorization); if (!pair || !pair.flowId || req.body?.requestId !== pair.requestId || typeof req.body?.approved !== "boolean") return res.status(401).json({ error: "unauthorized" });
       const flow = this.store.get<Flow>("flow", pair.flowId); if (!flow || pair.approved) return res.status(409).json({ error: "approval_unavailable" });
       if (!req.body.approved) { flow.denied = true; this.store.set("flow", pair.flowId, flow, pair.expires); return res.json({ state: "denied" }); }
-      pair.approved = true; pair.owner = randomUUID(); flow.owner = pair.owner;
+      const additionalClient = Boolean(pair.owner);
+      pair.approved = true; pair.owner ??= randomUUID(); flow.owner = pair.owner;
       this.store.set("pair", req.params.id, pair, pair.expires); this.store.set("flow", pair.flowId, flow, pair.expires);
-      const grant: Grant = { clientId: "orion-native-device", owner: pair.owner, deviceId: pair.instanceId, scopes: ["orion:device"], resource: this.resource, family: randomUUID(), expires: Date.now() + 30 * day };
-      const deviceToken = secret(); this.store.set("access", digest(deviceToken), grant, Date.now() + 60 * minute);
-      res.json({ state: "approved", deviceToken, expiresIn: 3600 });
+      if (additionalClient) return res.json({ state: "approved" });
+      res.json({ state: "approved", ...this.issueDevice({ clientId: "orion-native-device", owner: pair.owner, deviceId: pair.instanceId, scopes: ["orion:device"], resource: this.resource, family: randomUUID(), expires: Date.now() + 30 * day }) });
+    });
+    // The device renews its short-lived channel credential without a human; reuse of a rotated token revokes the whole family.
+    app.post("/devices/token/refresh", (req, res) => {
+      const refresh = typeof req.body?.refreshToken === "string" ? req.body.refreshToken : "", fingerprint = digest(refresh);
+      const used = this.store.get<Grant>("used-device-refresh", fingerprint);
+      if (used) { this.store.set("revoked", used.family, true, used.expires); return res.status(401).json({ error: "refresh_reuse_detected" }); }
+      const grant = this.store.get<Grant>("device-refresh", fingerprint);
+      if (!grant || this.store.get("revoked", grant.family) || !this.store.take("device-refresh", fingerprint)) return res.status(401).json({ error: "unauthorized" });
+      this.store.set("used-device-refresh", fingerprint, grant, grant.expires);
+      res.json(this.issueDevice(grant));
+    });
+    app.post("/devices/disconnect", async (req, res) => {
+      try {
+        const identity = await this.verifyAccessToken((req.headers.authorization ?? "").replace(/^Bearer /, ""));
+        const grant = this.store.get<Grant>("access", digest(identity.token));
+        if (!grant || !identity.scopes.includes("orion:device")) return res.status(401).json({ error: "unauthorized" });
+        this.store.set("revoked", grant.family, true, grant.expires); res.json({ state: "revoked" });
+      } catch { res.status(401).json({ error: "unauthorized" }); }
     });
     app.post("/pair-authorize", (req, res) => {
       const flowId = typeof req.body?.flow === "string" ? req.body.flow : "";
