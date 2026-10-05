@@ -1,3 +1,9 @@
+> **LEGADO — 2026-10-05.** ORIONMCP pasó a ser un producto de OrionBIM: lo sirve el backend de OrionBIM
+> (`https://backend-orionbim-production.up.railway.app/mcp`), se autentica con la cuenta de OrionBIM y el Revit se conecta
+> desde el add-in de OrionBIM (botón «Conectar IA»). Este repositorio (servidor Node, add-in propio, emparejamiento por
+> código) ya no es el camino de uso. Plan y estado: `docs-v2/integration-architecture/ORIONMCP-INTEGRACION-ORIONBIM.md`
+> del repositorio principal de OrionBIM.
+
 # ORIONMCP
 
 ORIONMCP conecta Autodesk Revit 2024 con Shelra y otros clientes compatibles con
